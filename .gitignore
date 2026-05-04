@@ -1,0 +1,4 @@
+fastapi/
+indexed_functions.json
+__pycache__/
+*.pyc
