@@ -1,10 +1,14 @@
-# Code Indexer
+# CodeWeave
 
-A tool that parses a Python codebase into structured JSON — extracting functions, classes, decorators, docstrings, call relationships, and imports. Built as Phase 1 of a larger project to index codebases into a context graph for AI-powered code intelligence.
+A tool that parses a Python codebase into a structured context graph — extracting functions, classes, decorators, docstrings, call relationships, and imports, then connecting them into a traversable directed graph.
+
+Built as the foundation for AI-powered code intelligence: ask "what breaks if I change this?" or "show me everything related to authentication."
 
 ---
 
 ## What this does
+
+**Phase 1 — Parse**
 
 Walks every `.py` file in a target repo and extracts:
 
@@ -16,13 +20,24 @@ Walks every `.py` file in a target repo and extracts:
 - Line ranges
 - File-level imports
 
-Output is a single `indexed_functions.json` file — one record per function or class.
+Output: `indexed_functions.json` and `import_records.json`
+
+**Phase 2 — Build graph**
+
+Takes the parsed JSON and builds a directed graph where:
+
+- **Nodes** are functions and classes, each carrying all parsed metadata as attributes
+- **Edges** carry type: `calls` (function → function) or `imports` (module → module)
+- Call names are resolved to real nodes using a name index with same-module preference
+- Import edges are drawn from raw `from X import Y` statements
+
+Output: `graph.pkl` — a persistent NetworkX DiGraph, reloadable instantly without re-parsing
 
 ---
 
 ## Target repo
 
-This tool is built and tested against [FastAPI](https://github.com/fastapi/fastapi).
+Built and tested against [FastAPI](https://github.com/fastapi/fastapi).
 
 Clone it as a sibling directory before running:
 
@@ -44,7 +59,7 @@ git clone https://github.com/fastapi/fastapi.git
 cd code-indexer
 python3 -m venv venv
 source venv/bin/activate
-pip install tree-sitter tree-sitter-python
+pip install tree-sitter tree-sitter-python networkx
 ```
 
 ---
@@ -55,13 +70,16 @@ pip install tree-sitter tree-sitter-python
 python3 main.py
 ```
 
-Output is written to `indexed_functions.json` in the project root.
+Outputs written to `code-indexer/`:
+- `indexed_functions.json` — all parsed records
+- `import_records.json` — file-level import data
+- `graph.pkl` — the full context graph
 
 ---
 
 ## Output format
 
-Each record in the JSON looks like this:
+Each record in `indexed_functions.json`:
 
 ```json
 {
@@ -78,7 +96,24 @@ Each record in the JSON looks like this:
 }
 ```
 
-Classes include a `bases` field (superclasses) and `methods` (list of method names).
+Classes additionally include `bases` (superclasses) and `methods` (list of method names).
+
+---
+
+## Querying the graph
+
+```python
+import pickle
+
+with open("code-indexer/graph.pkl", "rb") as f:
+    G = pickle.load(f)
+
+# what does this node call?
+print(list(G.successors(node_id)))
+
+# what calls this node? (blast radius)
+print(list(G.predecessors(node_id)))
+```
 
 ---
 
@@ -87,8 +122,8 @@ Classes include a `bases` field (superclasses) and `methods` (list of method nam
 | Phase | Description | Status |
 |---|---|---|
 | 1 | Parse codebase → structured JSON | ✅ Done |
-| 2 | Build context graph (NetworkX) | 🔜 Next |
-| 3 | Enrich nodes with docs, GitHub issues, tests | ⬜ Planned |
+| 2 | Build context graph (NetworkX) | ✅ Done |
+| 3 | Enrich nodes with docs, GitHub issues, tests | 🔜 Next |
 | 4 | Embed nodes + store in vector DB | ⬜ Planned |
 | 5 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
 
@@ -98,3 +133,5 @@ Classes include a `bases` field (superclasses) and `methods` (list of method nam
 
 - [`tree-sitter`](https://github.com/tree-sitter/tree-sitter) — AST parsing
 - [`tree-sitter-python`](https://github.com/tree-sitter/tree-sitter-python) — Python grammar
+- [`networkx`](https://networkx.org/) — directed graph construction and traversal
+- `pickle` — graph persistence

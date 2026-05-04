@@ -1,4 +1,7 @@
 fastapi/
 indexed_functions.json
+import_records.json
+graph.pkl
 __pycache__/
 *.pyc
+venv/
