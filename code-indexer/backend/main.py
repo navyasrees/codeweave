@@ -1,3 +1,8 @@
+import sys
+sys.path.append(".")
+
+import bootstrap  # runs pipeline if needed
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# load once at startup
 G, collection, model = load_resources()
 
 class QueryRequest(BaseModel):
