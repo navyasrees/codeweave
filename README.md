@@ -67,13 +67,21 @@ pip install tree-sitter tree-sitter-python networkx
 ## Run
 
 ```bash
-python3 main.py
+python3 code-indexer/main.py
 ```
 
 Outputs written to `code-indexer/`:
 - `indexed_functions.json` — all parsed records
 - `import_records.json` — file-level import data
 - `graph.pkl` — the full context graph
+
+---
+
+## Project structure
+
+- `code-indexer/indexer.py` — AST parsing and JSON record extraction
+- `code-indexer/graph_builder.py` — graph node/edge construction and pickle save/load
+- `code-indexer/main.py` — pipeline runner that ties indexing and graph building together
 
 ---
 
@@ -96,7 +104,7 @@ Each record in `indexed_functions.json`:
 }
 ```
 
-Classes additionally include `bases` (superclasses) and `methods` (list of method names).
+Classes additionally include `methods` (list of method names).
 
 ---
 
