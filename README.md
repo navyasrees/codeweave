@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # CodeWeave
 
 A tool that parses a Python codebase into a structured context graph — extracting functions, classes, decorators, docstrings, call relationships, and imports, then connecting them into a traversable directed graph.
@@ -242,15 +241,3 @@ curl -X POST http://127.0.0.1:8000/query \
 - [`React`](https://react.dev/) — frontend UI
 - [`Vite`](https://vitejs.dev/) — frontend build/dev tooling
 - `pickle` — graph persistence
-=======
----
-title: Codeweave Backend
-emoji: 🏢
-colorFrom: yellow
-colorTo: yellow
-sdk: docker
-pinned: false
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
->>>>>>> 430c81890e12c556e06a423cb0851e6c8f1cdefe
