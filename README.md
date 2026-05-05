@@ -42,6 +42,14 @@ Walks FastAPI markdown docs in `fastapi/docs/en/docs` and:
 - Attaches matched sections to node attribute `doc_sections`
 - Saves the enriched graph back to `graph.pkl`
 
+**Phase 4 — Enrich with GitHub issues**
+
+Fetches issues from a target GitHub repo and:
+
+- Matches issue titles to graph node names
+- Attaches matched issues to node attribute `github_issues`
+- Saves the enriched graph back to `graph.pkl`
+
 ---
 
 ## Target repo
@@ -68,7 +76,13 @@ git clone https://github.com/fastapi/fastapi.git
 cd code-indexer
 python3 -m venv venv
 source venv/bin/activate
-pip install tree-sitter tree-sitter-python networkx
+pip install tree-sitter tree-sitter-python networkx python-dotenv PyGithub
+```
+
+Create a `.env` file in the repo root:
+
+```bash
+GITHUB_TOKEN=your_github_token_here
 ```
 
 ---
@@ -82,7 +96,7 @@ python3 code-indexer/main.py
 Outputs written to `code-indexer/`:
 - `indexed_functions.json` — all parsed records
 - `import_records.json` — file-level import data
-- `graph.pkl` — the full context graph (including `doc_sections` after enrichment)
+- `graph.pkl` — the full context graph (including `doc_sections` and `github_issues` after enrichment)
 
 ---
 
@@ -116,6 +130,10 @@ Each record in `indexed_functions.json`:
 
 Classes additionally include `methods` (list of method names).
 
+Enriched nodes may also include:
+- `doc_sections` — matched docs sections with `source`, `heading`, `content`
+- `github_issues` — matched issues with `number`, `title`, `url`, `state`
+
 ---
 
 ## Querying the graph
@@ -142,9 +160,10 @@ print(list(G.predecessors(node_id)))
 | 1 | Parse codebase → structured JSON | ✅ Done |
 | 2 | Build context graph (NetworkX) | ✅ Done |
 | 3 | Enrich nodes with docs | ✅ Done |
-| 4 | Add GitHub issues and test links to nodes | 🔜 Next |
-| 5 | Embed nodes + store in vector DB | ⬜ Planned |
-| 6 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
+| 4 | Enrich nodes with GitHub issues | ✅ Done |
+| 5 | Add test links to nodes | 🔜 Next |
+| 6 | Embed nodes + store in vector DB | ⬜ Planned |
+| 7 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
 
 ---
 
@@ -153,4 +172,6 @@ print(list(G.predecessors(node_id)))
 - [`tree-sitter`](https://github.com/tree-sitter/tree-sitter) — AST parsing
 - [`tree-sitter-python`](https://github.com/tree-sitter/tree-sitter-python) — Python grammar
 - [`networkx`](https://networkx.org/) — directed graph construction and traversal
+- [`python-dotenv`](https://github.com/theskumar/python-dotenv) — environment variable loading
+- [`PyGithub`](https://github.com/PyGithub/PyGithub) — GitHub API access for issue enrichment
 - `pickle` — graph persistence

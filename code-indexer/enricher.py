@@ -1,6 +1,44 @@
 import pickle
 from pathlib import Path
 
+import os
+from dotenv import load_dotenv
+from github import Github
+
+def enrich_with_issues(G, github_repo, name_index):
+    load_dotenv()
+    token = os.getenv("GITHUB_TOKEN")
+    gh = Github(token)
+    repo = gh.get_repo(github_repo)
+
+    def normalize(text):
+        cleaned = text.strip().lower()
+        for ch in ("`", "*", "_", ":", "(", ")", "[", "]", "{", "}", ",", ".", "!", "?", "/"):
+            cleaned = cleaned.replace(ch, " ")
+        return " ".join(cleaned.split())
+
+    for issue in repo.get_issues(state="all"):
+        normalized_title = normalize(issue.title)
+        matched_nodes = []
+
+        for name, node_ids in name_index.items():
+            if len(name) < 5:
+                continue
+            if normalize(name) in normalized_title:
+                matched_nodes.extend(node_ids)
+
+        for node_id in set(matched_nodes):
+            if node_id not in G.nodes:
+                continue
+            G.nodes[node_id].setdefault("github_issues", []).append({
+                "number": issue.number,
+                "title": issue.title,
+                "url": issue.html_url,
+                "state": issue.state,
+            })
+
+    return G
+
 
 def enrich_with_docs(G, docs_dir, name_index):
     docs_root = Path(docs_dir)
