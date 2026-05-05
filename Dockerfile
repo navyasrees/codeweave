@@ -7,10 +7,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY code-indexer/ ./code-indexer/
+COPY . .
 
-WORKDIR /app/code-indexer
+RUN mkdir -p code-indexer
 
 EXPOSE 7860
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "code-indexer.backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
