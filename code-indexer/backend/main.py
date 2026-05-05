@@ -1,5 +1,9 @@
 import sys
-sys.path.append(".")
+import os
+
+# Ensure imports (bootstrap/indexer/etc.) resolve from the local project root.
+# This avoids accidentally picking up a different `bootstrap.py` elsewhere in sys.path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import bootstrap  # runs pipeline if needed
 

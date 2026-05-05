@@ -8,8 +8,11 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from groq import Groq
 
-GRAPH_PATH = Path("code-indexer/graph.pkl")
-CHROMA_PATH = "code-indexer/chroma"
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+# Load persisted artifacts from a stable absolute path (not CWD-dependent).
+GRAPH_PATH = BASE_DIR / "graph.pkl"
+CHROMA_PATH = str(BASE_DIR / "chroma")
 BLAST_RADIUS_KEYWORDS = [
     "breaks", "break", "change", "affect", "affects",
     "depends", "impact", "impacts", "what happens if"

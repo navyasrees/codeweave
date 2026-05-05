@@ -1,10 +1,19 @@
-from pathlib import Path
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+CODE_DIR = BASE_DIR / "code-indexer"
+
+# Ensure local modules (`code-indexer/indexer.py`, ...) are importable.
+sys.path.insert(0, str(CODE_DIR))
 
 def needs_rebuild():
     return (
-        not Path("code-indexer/graph.pkl").exists() or
-        not Path("code-indexer/chroma").exists()
+        not (CODE_DIR / "graph.pkl").exists() or
+        not (CODE_DIR / "chroma").exists()
     )
 
 def run_pipeline():
@@ -16,38 +25,38 @@ def run_pipeline():
 
     print("Starting pipeline rebuild...")
 
-    fastapi_dir = Path("fastapi")
+    fastapi_dir = CODE_DIR / "fastapi"
+    graph_file = CODE_DIR / "graph.pkl"
+    chroma_dir = CODE_DIR / "chroma"
 
     # clone if not present
     if not fastapi_dir.exists():
-        import subprocess
         print("Cloning FastAPI repo...")
         subprocess.run([
             "git", "clone",
             "https://github.com/fastapi/fastapi.git",
-            "fastapi"
+            str(fastapi_dir)
         ], check=True)
 
     indexed_functions, import_records = index_fastapi(fastapi_dir)
 
-    Path("code-indexer/indexed_functions.json").write_text(
+    (CODE_DIR / "indexed_functions.json").write_text(
         json.dumps(indexed_functions, indent=2)
     )
-    Path("code-indexer/import_records.json").write_text(
+    (CODE_DIR / "import_records.json").write_text(
         json.dumps(import_records, indent=2)
     )
 
     graph, name_index = build_graph(indexed_functions, import_records)
-    graph_file = Path("code-indexer/graph.pkl")
     save_graph(graph, graph_file)
 
-    graph = enrich_with_docs(graph, "fastapi/docs/en/docs", name_index)
+    graph = enrich_with_docs(graph, str(fastapi_dir / "docs/en/docs"), name_index)
     save_graph(graph, graph_file)
 
-    graph = enrich_with_tests(graph, "fastapi/tests", name_index)
+    graph = enrich_with_tests(graph, str(fastapi_dir / "tests"), name_index)
     save_graph(graph, graph_file)
 
-    embed_and_store(graph_file)
+    embed_and_store(graph_file, chroma_path=str(chroma_dir))
     print("Pipeline complete.")
 
 if needs_rebuild():

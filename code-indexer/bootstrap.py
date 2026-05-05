@@ -1,60 +1,69 @@
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "code-indexer"))
-
-from pathlib import Path
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-def needs_rebuild():
-    return (
-        not Path("code-indexer/graph.pkl").exists() or
-        not Path("code-indexer/chroma").exists()
-    )
+# Make sure local modules (`indexer.py`, `graph_builder.py`, ...) are importable.
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR))
 
-def run_pipeline():
-    from indexer import index_fastapi
-    from graph_builder import build_graph, save_graph
-    from enricher import enrich_with_docs, enrich_with_tests
+
+def needs_rebuild() -> bool:
+    graph_file = BASE_DIR / "graph.pkl"
+    chroma_dir = BASE_DIR / "chroma"
+    return (not graph_file.exists()) or (not chroma_dir.exists())
+
+
+def run_pipeline() -> None:
     from embedder import embed_and_store
-    import json
+    from enricher import enrich_with_docs, enrich_with_tests
+    from graph_builder import build_graph, save_graph
+    from indexer import index_fastapi
 
     print("Starting pipeline rebuild...")
 
-    fastapi_dir = Path("code-indexer/fastapi")
-    Path("code-indexer/indexed_functions.json").write_text(...)
-    Path("code-indexer/import_records.json").write_text(...)
-
-    graph_file = Path("code-indexer/graph.pkl")
+    fastapi_dir = BASE_DIR / "fastapi"
+    graph_file = BASE_DIR / "graph.pkl"
+    chroma_dir = BASE_DIR / "chroma"
 
     # clone if not present
     if not fastapi_dir.exists():
-        import subprocess
         print("Cloning FastAPI repo...")
-       subprocess.run([
-        "git", "clone",
-        "https://github.com/fastapi/fastapi.git",
-        "code-indexer/fastapi"
-    ], check=True)
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "https://github.com/fastapi/fastapi.git",
+                str(fastapi_dir),
+            ],
+            check=True,
+        )
+
     indexed_functions, import_records = index_fastapi(fastapi_dir)
 
-    Path("code-indexer/indexed_functions.json").write_text(
-        json.dumps(indexed_functions, indent=2)
+    (BASE_DIR / "indexed_functions.json").write_text(
+        json.dumps(indexed_functions, indent=2), encoding="utf-8"
     )
-    Path("code-indexer/import_records.json").write_text(
-        json.dumps(import_records, indent=2)
+    (BASE_DIR / "import_records.json").write_text(
+        json.dumps(import_records, indent=2), encoding="utf-8"
     )
 
     graph, name_index = build_graph(indexed_functions, import_records)
     save_graph(graph, graph_file)
 
-    graph = enrich_with_docs(graph, "fastapi/docs/en/docs", name_index)
+    docs_dir = fastapi_dir / "docs/en/docs"
+    graph = enrich_with_docs(graph, str(docs_dir), name_index)
     save_graph(graph, graph_file)
 
-    graph = enrich_with_tests(graph, "fastapi/tests", name_index)
+    tests_dir = fastapi_dir / "tests"
+    graph = enrich_with_tests(graph, str(tests_dir), name_index)
     save_graph(graph, graph_file)
 
-    embed_and_store(graph_file)
+    # Store Chroma under a stable absolute directory.
+    embed_and_store(graph_file, chroma_path=str(chroma_dir))
     print("Pipeline complete.")
+
 
 if needs_rebuild():
     run_pipeline()
