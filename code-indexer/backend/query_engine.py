@@ -4,7 +4,6 @@ from sentence_transformers import SentenceTransformer
 from pathlib import Path
 import networkx as nx
 import os
-from anthropic import Anthropic
 from dotenv import load_dotenv
 from groq import Groq
 
