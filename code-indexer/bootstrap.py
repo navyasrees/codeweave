@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "code-indexer"))
+
 from pathlib import Path
 import json
 
@@ -16,18 +20,21 @@ def run_pipeline():
 
     print("Starting pipeline rebuild...")
 
-    fastapi_dir = Path("fastapi")
+    fastapi_dir = Path("code-indexer/fastapi")
+    Path("code-indexer/indexed_functions.json").write_text(...)
+    Path("code-indexer/import_records.json").write_text(...)
+
+    graph_file = Path("code-indexer/graph.pkl")
 
     # clone if not present
     if not fastapi_dir.exists():
         import subprocess
         print("Cloning FastAPI repo...")
-        subprocess.run([
-            "git", "clone",
-            "https://github.com/fastapi/fastapi.git",
-            "fastapi"
-        ], check=True)
-
+       subprocess.run([
+        "git", "clone",
+        "https://github.com/fastapi/fastapi.git",
+        "code-indexer/fastapi"
+    ], check=True)
     indexed_functions, import_records = index_fastapi(fastapi_dir)
 
     Path("code-indexer/indexed_functions.json").write_text(
@@ -38,7 +45,6 @@ def run_pipeline():
     )
 
     graph, name_index = build_graph(indexed_functions, import_records)
-    graph_file = Path("code-indexer/graph.pkl")
     save_graph(graph, graph_file)
 
     graph = enrich_with_docs(graph, "fastapi/docs/en/docs", name_index)
