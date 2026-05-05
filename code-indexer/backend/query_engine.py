@@ -36,7 +36,8 @@ def ask_llm(question: str, context: str, mode: str) -> str:
 
     User question: {question}
 
-    Answer clearly and specifically based on the context above. Reference function names, modules, and files where relevant."""
+    Answer clearly and specifically based on the context above. Reference function names, modules, and files where relevant.
+    If the context provided is not relevant to the question, say "I don't have enough information in the codebase to answer that" instead of making something up."""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -57,6 +58,14 @@ def load_resources():
     
     return G, collection, model
 
+def guardrail(results, mode):
+    distances = results["distances"][0]
+    if min(distances) > 0.8:  # tune this threshold
+        return {
+            "answer": "I couldn't find anything relevant in the codebase for that question.",
+            "mode": mode,
+            "node_count": 0,
+        }
 
 
 def detect_mode(question: str) -> str:
@@ -73,6 +82,8 @@ def semantic_search(question, collection, G, model, top_k=10):
         query_embeddings=[embedding],
         n_results=top_k,
     )
+
+    guardrail(results, 'semantic_search')
     
     node_ids = results["ids"][0]
     context_nodes = {}
@@ -94,6 +105,8 @@ def blast_radius(question, collection, G, model, top_k=5):
         query_embeddings=[embedding],
         n_results=top_k,
     )
+
+    guardrail(results, 'blast_radius')
     
     node_ids = results["ids"][0]
     context_nodes = {}
