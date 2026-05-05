@@ -1,3 +1,12 @@
+---
+title: Codeweave Backend
+emoji: 🕸️
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 # CodeWeave
 
 A tool that parses a Python codebase into a structured context graph — extracting functions, classes, decorators, docstrings, call relationships, and imports, then connecting them into a traversable directed graph.
