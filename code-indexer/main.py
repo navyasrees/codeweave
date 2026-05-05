@@ -4,6 +4,7 @@ from pathlib import Path
 from graph_builder import build_graph, load_graph, save_graph, stable_node_id
 from indexer import index_fastapi
 from enricher import enrich_with_docs, enrich_with_issues, enrich_with_tests
+from embedder import embed_and_store
 
 
 def main():
@@ -37,7 +38,8 @@ def main():
     save_graph(graph, graph_file)
     print("Enrichment with tests complete.")
 
-
+    embed_and_store(graph_file)
+    print("Embedding and storing complete.")
 
 if __name__ == "__main__":
     main()
