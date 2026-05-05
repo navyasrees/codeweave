@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+networkx
+sentence-transformers
+chromadb
+groq
+python-dotenv
+tree-sitter
+tree-sitter-python
+PyGithub
