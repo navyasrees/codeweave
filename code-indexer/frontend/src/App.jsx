@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import "./App.css"
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 const EXAMPLES = [
   "what breaks if I change OAuth2PasswordBearer?",
@@ -105,7 +106,7 @@ export default function App() {
     setElapsed(null)
     const t0 = performance.now()
     try {
-      const res = await fetch("http://localhost:8000/query", {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text }),
