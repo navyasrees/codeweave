@@ -50,6 +50,16 @@ Fetches issues from a target GitHub repo and:
 - Attaches matched issues to node attribute `github_issues`
 - Saves the enriched graph back to `graph.pkl`
 
+**Phase 5 — Query engine**
+
+Serves natural-language code queries using embeddings + graph traversal:
+
+- Detects query intent (`semantic` vs `blast_radius`)
+- Runs vector retrieval from Chroma using sentence embeddings
+- Expands context with graph neighbors/ancestors
+- Builds compact node context including docs/issues metadata
+- Sends context + question to an LLM and returns an answer
+
 ---
 
 ## Target repo
@@ -83,6 +93,7 @@ Create a `.env` file in the repo root:
 
 ```bash
 GITHUB_TOKEN=your_github_token_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 ---
@@ -97,6 +108,7 @@ Outputs written to `code-indexer/`:
 - `indexed_functions.json` — all parsed records
 - `import_records.json` — file-level import data
 - `graph.pkl` — the full context graph (including `doc_sections` and `github_issues` after enrichment)
+- `chroma/` — persistent vector index used by the query engine
 
 ---
 
@@ -105,7 +117,9 @@ Outputs written to `code-indexer/`:
 - `code-indexer/indexer.py` — AST parsing and JSON record extraction
 - `code-indexer/graph_builder.py` — graph node/edge construction and pickle save/load
 - `code-indexer/enricher.py` — markdown doc ingestion and node enrichment
+- `code-indexer/embedder.py` — generates embeddings and stores them in Chroma
 - `code-indexer/main.py` — pipeline runner that ties indexing, graph building, and enrichment together
+- `code-indexer/backend/query_engine.py` — semantic search + blast-radius traversal + LLM answering
 
 ---
 
@@ -151,6 +165,17 @@ print(list(G.successors(node_id)))
 print(list(G.predecessors(node_id)))
 ```
 
+For natural-language querying via the query engine:
+
+```bash
+python3 code-indexer/backend/query_engine.py
+```
+
+The query engine:
+- loads `graph.pkl`, Chroma collection, and `all-MiniLM-L6-v2`
+- detects mode from keywords (impact-style questions trigger `blast_radius`)
+- returns mode, node count, assembled context, and final LLM answer
+
 ---
 
 ## Project roadmap
@@ -161,9 +186,10 @@ print(list(G.predecessors(node_id)))
 | 2 | Build context graph (NetworkX) | ✅ Done |
 | 3 | Enrich nodes with docs | ✅ Done |
 | 4 | Enrich nodes with GitHub issues | ✅ Done |
-| 5 | Add test links to nodes | 🔜 Next |
-| 6 | Embed nodes + store in vector DB | ⬜ Planned |
-| 7 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
+| 5 | Embed nodes + store in vector DB | ✅ Done |
+| 6 | Add query engine (semantic + blast radius) | ✅ Done |
+| 7 | Add test links to nodes | 🔜 Next |
+| 8 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
 
 ---
 
@@ -172,6 +198,9 @@ print(list(G.predecessors(node_id)))
 - [`tree-sitter`](https://github.com/tree-sitter/tree-sitter) — AST parsing
 - [`tree-sitter-python`](https://github.com/tree-sitter/tree-sitter-python) — Python grammar
 - [`networkx`](https://networkx.org/) — directed graph construction and traversal
+- [`chromadb`](https://github.com/chroma-core/chroma) — persistent vector store
+- [`sentence-transformers`](https://www.sbert.net/) — embedding generation
 - [`python-dotenv`](https://github.com/theskumar/python-dotenv) — environment variable loading
 - [`PyGithub`](https://github.com/PyGithub/PyGithub) — GitHub API access for issue enrichment
+- [`groq`](https://github.com/groq/groq-python) — LLM inference API client
 - `pickle` — graph persistence
