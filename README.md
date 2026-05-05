@@ -33,6 +33,15 @@ Takes the parsed JSON and builds a directed graph where:
 
 Output: `graph.pkl` — a persistent NetworkX DiGraph, reloadable instantly without re-parsing
 
+**Phase 3 — Enrich with docs**
+
+Walks FastAPI markdown docs in `fastapi/docs/en/docs` and:
+
+- Splits each `.md` by `#` headings into sections
+- Matches headings to graph node names
+- Attaches matched sections to node attribute `doc_sections`
+- Saves the enriched graph back to `graph.pkl`
+
 ---
 
 ## Target repo
@@ -73,7 +82,7 @@ python3 code-indexer/main.py
 Outputs written to `code-indexer/`:
 - `indexed_functions.json` — all parsed records
 - `import_records.json` — file-level import data
-- `graph.pkl` — the full context graph
+- `graph.pkl` — the full context graph (including `doc_sections` after enrichment)
 
 ---
 
@@ -81,7 +90,8 @@ Outputs written to `code-indexer/`:
 
 - `code-indexer/indexer.py` — AST parsing and JSON record extraction
 - `code-indexer/graph_builder.py` — graph node/edge construction and pickle save/load
-- `code-indexer/main.py` — pipeline runner that ties indexing and graph building together
+- `code-indexer/enricher.py` — markdown doc ingestion and node enrichment
+- `code-indexer/main.py` — pipeline runner that ties indexing, graph building, and enrichment together
 
 ---
 
@@ -131,9 +141,10 @@ print(list(G.predecessors(node_id)))
 |---|---|---|
 | 1 | Parse codebase → structured JSON | ✅ Done |
 | 2 | Build context graph (NetworkX) | ✅ Done |
-| 3 | Enrich nodes with docs, GitHub issues, tests | 🔜 Next |
-| 4 | Embed nodes + store in vector DB | ⬜ Planned |
-| 5 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
+| 3 | Enrich nodes with docs | ✅ Done |
+| 4 | Add GitHub issues and test links to nodes | 🔜 Next |
+| 5 | Embed nodes + store in vector DB | ⬜ Planned |
+| 6 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
 
 ---
 
