@@ -3,6 +3,7 @@ from pathlib import Path
 
 from graph_builder import build_graph, load_graph, save_graph, stable_node_id
 from indexer import index_fastapi
+from enricher import enrich_with_docs
 
 
 def main():
@@ -18,24 +19,15 @@ def main():
     print(f"Saved {len(import_records)} import records to {imports_file}")
     print(f"Saved {len(indexed_functions)} functions to {output_file}")
 
-    graph = build_graph(indexed_functions, import_records)
-    print(graph.number_of_nodes())
+    graph, name_index = build_graph(indexed_functions, import_records)
+    graph_file = Path("code-indexer/graph.pkl")
+    save_graph(graph, graph_file)
     print(f"Nodes: {graph.number_of_nodes()}")
     print(f"Edges: {graph.number_of_edges()}")
 
-    graph_file = Path("code-indexer/graph.pkl")
+    graph = enrich_with_docs(graph, "fastapi/docs/en/docs", name_index)
     save_graph(graph, graph_file)
-    graph = load_graph(graph_file)
-
-    target_record = next(
-        (record for record in indexed_functions if record["name"] == "OAuth2PasswordBearer"),
-        None,
-    )
-    if target_record:
-        node = stable_node_id(target_record)
-        print(graph.nodes[node])
-        print("Calls:", list(graph.successors(node)))
-        print("Called by:", list(graph.predecessors(node)))
+    print("Enrichment complete.")
 
 
 if __name__ == "__main__":

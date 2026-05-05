@@ -22,26 +22,25 @@ def build_graph(records, import_records):
 
     name_index = {}
     for record in records:
+        name = record["name"]
         node_id = stable_node_id(record)
-        name_index.setdefault(record["name"], []).append(node_id)
+        if name not in name_index:
+            name_index[name] = []
+        name_index[name].append(node_id)
 
     for record in records:
         caller_id = stable_node_id(record)
         for call_name in record.get("calls", []):
             base_name = call_name.split(".")[-1]
-            candidates = name_index.get(base_name, [])
-            if not candidates:
-                continue
-
-            if len(candidates) == 1:
-                graph.add_edge(caller_id, candidates[0], type="calls")
-                continue
-
-            preferred_prefix = f"{record['module']}."
-            same_module = [cand for cand in candidates if cand.startswith(preferred_prefix)]
-            target = same_module[0] if same_module else candidates[0]
-            graph.add_edge(caller_id, target, type="calls")
-
+            if base_name in name_index:
+                candidates = name_index[base_name]
+                if len(candidates) == 1:
+                    graph.add_edge(caller_id, candidates[0], type="calls")
+                else:
+                    same_module = [c for c in candidates if record["module"] in c]
+                    target = same_module[0] if same_module else candidates[0]
+                    graph.add_edge(caller_id, target, type="calls")
+        
     for file_record in import_records:
         from_module = file_record["module"]
         for imp in file_record.get("imports", []):
@@ -53,7 +52,7 @@ def build_graph(records, import_records):
             to_module = parts[1]
             graph.add_edge(from_module, to_module, type="imports")
 
-    return graph
+    return graph, name_index
 
 
 def save_graph(graph, output_path):
