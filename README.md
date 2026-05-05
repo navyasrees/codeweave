@@ -60,6 +60,14 @@ Serves natural-language code queries using embeddings + graph traversal:
 - Builds compact node context including docs/issues metadata
 - Sends context + question to an LLM and returns an answer
 
+**Phase 6 — Frontend chat UI**
+
+Provides a React interface to query the backend:
+
+- Simple chat-style input for natural language questions
+- Sends requests to backend `/query` endpoint
+- Renders answers and supporting context returned by the API
+
 ---
 
 ## Target repo
@@ -110,6 +118,20 @@ Outputs written to `code-indexer/`:
 - `graph.pkl` — the full context graph (including `doc_sections` and `github_issues` after enrichment)
 - `chroma/` — persistent vector index used by the query engine
 
+Run backend API:
+
+```bash
+uvicorn backend.main:app --reload --app-dir code-indexer
+```
+
+Run frontend:
+
+```bash
+cd code-indexer/frontend
+npm install
+npm run dev
+```
+
 ---
 
 ## Project structure
@@ -120,6 +142,8 @@ Outputs written to `code-indexer/`:
 - `code-indexer/embedder.py` — generates embeddings and stores them in Chroma
 - `code-indexer/main.py` — pipeline runner that ties indexing, graph building, and enrichment together
 - `code-indexer/backend/query_engine.py` — semantic search + blast-radius traversal + LLM answering
+- `code-indexer/backend/main.py` — FastAPI app exposing `/query` endpoint
+- `code-indexer/frontend/` — Vite + React chat interface
 
 ---
 
@@ -176,6 +200,14 @@ The query engine:
 - detects mode from keywords (impact-style questions trigger `blast_radius`)
 - returns mode, node count, assembled context, and final LLM answer
 
+For HTTP querying from the frontend (or curl):
+
+```bash
+curl -X POST http://127.0.0.1:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"show me all authentication related code"}'
+```
+
 ---
 
 ## Project roadmap
@@ -188,8 +220,9 @@ The query engine:
 | 4 | Enrich nodes with GitHub issues | ✅ Done |
 | 5 | Embed nodes + store in vector DB | ✅ Done |
 | 6 | Add query engine (semantic + blast radius) | ✅ Done |
-| 7 | Add test links to nodes | 🔜 Next |
-| 8 | Chat interface — "what breaks if I change X?" | ⬜ Planned |
+| 7 | Add frontend chat interface | ✅ Done |
+| 8 | Add test links to nodes | 🔜 Next |
+| 9 | Improve chat workflows and evaluation | ⬜ Planned |
 
 ---
 
@@ -203,4 +236,8 @@ The query engine:
 - [`python-dotenv`](https://github.com/theskumar/python-dotenv) — environment variable loading
 - [`PyGithub`](https://github.com/PyGithub/PyGithub) — GitHub API access for issue enrichment
 - [`groq`](https://github.com/groq/groq-python) — LLM inference API client
+- [`FastAPI`](https://fastapi.tiangolo.com/) — backend API layer
+- [`uvicorn`](https://www.uvicorn.org/) — ASGI server for local backend
+- [`React`](https://react.dev/) — frontend UI
+- [`Vite`](https://vitejs.dev/) — frontend build/dev tooling
 - `pickle` — graph persistence
