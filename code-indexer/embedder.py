@@ -1,6 +1,8 @@
-from sentence_transformers import SentenceTransformer
 import chromadb
 import pickle
+import voyageai
+import os
+from dotenv import load_dotenv
 
 def node_to_text(node_id, data):
     parts = []
@@ -32,14 +34,15 @@ def node_to_text(node_id, data):
     return " | ".join(parts)
 
 
-def embed_and_store(graph_path, chroma_path="code-indexer/chroma",collection_name="codebase"):
+def embed_and_store(graph_path, chroma_path="code-indexer/chroma", collection_name="codebase"):
     with open(graph_path, "rb") as f:
         G = pickle.load(f)
     
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    load_dotenv()
+    vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
+    
     client = chromadb.PersistentClient(path=chroma_path)
     
-    # delete collection if exists to avoid duplicates on re-run
     try:
         client.delete_collection(collection_name)
     except:
@@ -62,13 +65,16 @@ def embed_and_store(graph_path, chroma_path="code-indexer/chroma",collection_nam
             "module": str(data.get("module", "")),
         })
     
-    # embed and store in batches
-    batch_size = 100
+    # voyage has a limit of 128 texts per batch
+    batch_size = 128
     for i in range(0, len(ids), batch_size):
         batch_ids = ids[i:i+batch_size]
         batch_texts = texts[i:i+batch_size]
         batch_meta = metadatas[i:i+batch_size]
-        embeddings = model.encode(batch_texts).tolist()
+        
+        result = vo.embed(batch_texts, model="voyage-code-2", input_type="document")
+        embeddings = result.embeddings
+        
         collection.add(
             ids=batch_ids,
             embeddings=embeddings,

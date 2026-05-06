@@ -1,11 +1,12 @@
 import pickle
 import chromadb
-from sentence_transformers import SentenceTransformer
 from pathlib import Path
 import networkx as nx
 import os
 from dotenv import load_dotenv
 from groq import Groq
+import voyageai
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -69,6 +70,8 @@ def ask_llm(question: str, context: str, mode: str) -> str:
     return response.choices[0].message.content
 
 def load_resources(repo_name: str = "fastapi"):
+    load_dotenv()
+    vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
     artifact_dir = Path("artifacts") / repo_name
     graph_path = artifact_dir / "graph.pkl"
     chroma_path = str(artifact_dir / "chroma")
@@ -77,20 +80,17 @@ def load_resources(repo_name: str = "fastapi"):
         G = pickle.load(f)
 
     client = chromadb.PersistentClient(path=chroma_path)
-    collection = client.get_collection(repo_name) 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    collection = client.get_collection(repo_name)
 
-    return G, collection, model
+    return G, collection, vo
+
+class NotRelevantError(Exception):
+    pass
 
 def guardrail(results, mode):
     distances = results["distances"][0]
-    if min(distances) > 0.8:  # tune this threshold
-        return {
-            "answer": "I couldn't find anything relevant in the codebase for that question.",
-            "mode": mode,
-            "node_count": 0,
-        }
-
+    if min(distances) > 0.8:
+        raise NotRelevantError("I couldn't find anything relevant in the codebase for that question.")
 
 def detect_mode(question: str) -> str:
     q = question.lower()
@@ -99,58 +99,63 @@ def detect_mode(question: str) -> str:
             return "blast_radius"
     return "semantic"
 
-def semantic_search(question, collection, G, model, top_k=10):
-    embedding = model.encode([question]).tolist()[0]
-    
+def semantic_search(question, collection, G, vo, top_k=5):
+    result = vo.embed([question], model="voyage-code-2", input_type="query")
+    embedding = result.embeddings[0]
+
     results = collection.query(
         query_embeddings=[embedding],
         n_results=top_k,
+        include=["distances"]
     )
 
-    guardrail(results, 'semantic_search')
-    
     node_ids = results["ids"][0]
+    distances = results["distances"][0]
+
     context_nodes = {}
-    
-    for node_id in node_ids:
+    for node_id, distance in zip(node_ids, distances):
+        if distance > 0.8:
+            continue
         if node_id in G.nodes:
             context_nodes[node_id] = G.nodes[node_id]
-            # 1-hop expansion — pull in neighbors
             for neighbor in list(G.successors(node_id)) + list(G.predecessors(node_id)):
                 if neighbor in G.nodes:
                     context_nodes[neighbor] = G.nodes[neighbor]
-    
+
     return context_nodes
 
-def blast_radius(question, collection, G, model, top_k=5):
-    # find the most relevant node first
-    embedding = model.encode([question]).tolist()[0]
+def blast_radius(question, collection, G, vo, top_k=3):
+    result = vo.embed([question], model="voyage-code-2", input_type="query")
+    embedding = result.embeddings[0]
+
     results = collection.query(
         query_embeddings=[embedding],
         n_results=top_k,
     )
 
-    guardrail(results, 'blast_radius')
-    
     node_ids = results["ids"][0]
     context_nodes = {}
-    
+
     for start_node in node_ids:
         if start_node not in G.nodes:
             continue
-        
-        # reverse BFS — find everything that reaches this node
-        ancestors = nx.ancestors(G, start_node)
-        
-        # include the start node itself
         context_nodes[start_node] = G.nodes[start_node]
-        
-        # include all ancestors (callers, importers)
-        for ancestor in ancestors:
-            if ancestor in G.nodes:
-                context_nodes[ancestor] = G.nodes[ancestor]
-    
+
+        visited = {start_node}
+        current_layer = {start_node}
+
+        for _ in range(2):
+            next_layer = set()
+            for node in current_layer:
+                for pred in G.predecessors(node):
+                    if pred not in visited and pred in G.nodes:
+                        next_layer.add(pred)
+                        context_nodes[pred] = G.nodes[pred]
+                        visited.add(pred)
+            current_layer = next_layer
+
     return context_nodes
+
 
 def build_context(context_nodes: dict) -> str:
     lines = []
@@ -178,17 +183,25 @@ def build_context(context_nodes: dict) -> str:
     
     return "\n\n".join(lines)
 
-def query(question: str, G, collection, model) -> dict:
+def query(question: str, G, collection, vo) -> dict:
     mode = detect_mode(question)
-    
-    if mode == "blast_radius":
-        context_nodes = blast_radius(question, collection, G, model)
-    else:
-        context_nodes = semantic_search(question, collection, G, model)
-    
+
+    try:
+        if mode == "blast_radius":
+            context_nodes = blast_radius(question, collection, G, vo)
+        else:
+            context_nodes = semantic_search(question, collection, G, vo)
+    except NotRelevantError as e:
+        return {
+            "mode": mode,
+            "context": "",
+            "node_count": 0,
+            "answer": str(e),
+        }
+
     context = build_context(context_nodes)
     answer = ask_llm(question, context, mode)
-    
+
     return {
         "mode": mode,
         "context": context,
