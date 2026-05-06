@@ -987,3 +987,231 @@
   .index-card { padding: 22px 18px 18px; }
   .stepper { padding: 18px 16px; }
 }
+
+/* =========================================================
+   Indexed repos list (bottom of IndexView)
+   ========================================================= */
+.indexed-repos {
+  margin: 36px auto 0;
+  max-width: 100%;
+}
+.indexed-repos-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.indexed-repos-label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+.indexed-repos-count {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.indexed-repos-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.indexed-repo-item {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.indexed-repo-item:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+.indexed-repo-item.active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.indexed-repo-pick {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.indexed-repo-pick:hover .indexed-repo-arrow,
+.indexed-repo-item.active .indexed-repo-arrow {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+.indexed-repo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.indexed-repo-icon svg { width: 14px; height: 14px; }
+.indexed-repo-item.active .indexed-repo-icon {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.indexed-repo-name {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  color: var(--text-hi);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indexed-repo-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.indexed-repo-tag.accent {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.indexed-repo-spacer { flex: 1; }
+
+.indexed-repo-arrow {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.indexed-repo-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 36px;
+  font-size: 18px;
+  line-height: 1;
+  border-left: 1px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.indexed-repo-remove:hover {
+  color: var(--danger);
+  background: rgba(248, 113, 113, 0.10);
+}
+
+@media (max-width: 720px) {
+  .indexed-repo-tag { display: none; }
+  .indexed-repo-pick { padding: 12px 14px; gap: 10px; }
+  .indexed-repo-name { font-size: 13px; }
+}
+
+/* =========================================================
+   Try-with-FastAPI CTA (shown on IndexView when no repos exist)
+   ========================================================= */
+.try-fastapi {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin: 28px auto 0;
+  padding: 18px 18px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  font-family: var(--sans);
+}
+.try-fastapi:hover:not(:disabled) {
+  background: rgba(167, 139, 250, 0.18);
+  border-color: rgba(167, 139, 250, 0.55);
+  transform: translateY(-1px);
+}
+.try-fastapi:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.try-fastapi-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0a0a0f;
+  flex-shrink: 0;
+}
+.try-fastapi-icon svg { width: 18px; height: 18px; }
+
+.try-fastapi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.try-fastapi-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-hi);
+  letter-spacing: -0.005em;
+}
+.try-fastapi-url {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.try-fastapi-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+.try-fastapi:hover:not(:disabled) .try-fastapi-arrow { transform: translateX(3px); }
+
+@media (max-width: 720px) {
+  .try-fastapi { padding: 14px 14px; gap: 12px; }
+  .try-fastapi-icon { width: 32px; height: 32px; }
+  .try-fastapi-icon svg { width: 16px; height: 16px; }
+  .try-fastapi-label { font-size: 13.5px; }
+}

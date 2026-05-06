@@ -5,22 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 /* ------------------------------ constants ------------------------------ */
 
-const DEFAULT_REPO = "fastapi"
-
-const EXAMPLES_BY_REPO = {
-  fastapi: [
-    "what breaks if I change OAuth2PasswordBearer?",
-    "show me all code related to authentication",
-    "where is dependency injection resolved?",
-    "explain how routing works in fastapi",
-  ],
-  __default: [
-    "give me a high-level overview of this codebase",
-    "what are the main entry points?",
-    "how is configuration loaded?",
-    "where is the most complex logic?",
-  ],
-}
+const FASTAPI_URL = "https://github.com/fastapi/fastapi"
 
 const STAGES = [
   { key: "pending",        label: "Queued" },
@@ -188,15 +173,16 @@ function renderMarkdown(text) {
    ============================================================================ */
 
 export default function App() {
-  const [repos, setRepos] = useState(() => {
-    const stored = lsGet(LS.repos, [DEFAULT_REPO])
-    return Array.isArray(stored) && stored.includes(DEFAULT_REPO) ? stored : [DEFAULT_REPO, ...(stored || []).filter(r => r !== DEFAULT_REPO)]
-  })
-  const [activeRepo, setActiveRepo] = useState(() => lsGet(LS.active, DEFAULT_REPO))
+  // Repos = source of truth from backend GET /repos (lists artifacts/<name>/graph.pkl).
+  // We don't pre-seed anything — fastapi only appears here if it actually exists in artifacts.
+  const [repos, setRepos] = useState([])
+  const [activeRepo, setActiveRepo] = useState(() => lsGet(LS.active, null))
   const [view, setView] = useState(() => {
-    // resume an in-flight indexing job if we left one mid-run
+    // Only resume the progress view if a job is genuinely mid-flight.
+    // Stale "done" / "error" jobs from a previous session shouldn't trap the user here on refresh.
     const job = lsGet(LS.job, null)
-    return job?.jobId ? "progress" : "query"
+    if (job?.jobId && job.status !== "done" && job.status !== "error") return "progress"
+    return "index"
   })
 
   // index form
@@ -204,8 +190,13 @@ export default function App() {
   const [indexing, setIndexing] = useState(false)
   const [indexError, setIndexError] = useState(null)
 
-  // active job + polling
-  const [job, setJob] = useState(() => lsGet(LS.job, null))
+  // active job + polling. Drop stale done/error jobs at startup so they don't reappear
+  // on the progress screen and so the next effect tick clears them from localStorage.
+  const [job, setJob] = useState(() => {
+    const j = lsGet(LS.job, null)
+    if (j?.status === "done" || j?.status === "error") return null
+    return j
+  })
   const pollTimerRef = useRef(null)
 
   // query
@@ -218,6 +209,9 @@ export default function App() {
   const [elapsed, setElapsed] = useState(null)
   const inputRef = useRef(null)
 
+  // examples — fetched per-repo from GET /examples/{name}
+  const [examples, setExamples] = useState([])
+
   /* --- persist whenever core state changes --- */
   useEffect(() => { lsSet(LS.repos, repos) }, [repos])
   useEffect(() => { lsSet(LS.active, activeRepo) }, [activeRepo])
@@ -225,6 +219,38 @@ export default function App() {
     if (job?.jobId) lsSet(LS.job, job)
     else lsDel(LS.job)
   }, [job])
+
+  /* --- fetch indexed repos from backend on mount, and after indexing completes --- */
+  const fetchRepos = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/repos`)
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      const data = await res.json()
+      const list = Array.isArray(data.repos) ? data.repos : []
+      setRepos(list)
+      // sync activeRepo with what's actually available
+      setActiveRepo(prev => (prev && list.includes(prev)) ? prev : (list[0] || null))
+    } catch {
+      // backend offline — leave repos empty so the user can still see the index form
+      setRepos([])
+    }
+  }, [])
+
+  useEffect(() => { fetchRepos() }, [fetchRepos])
+
+  /* --- per-repo example questions (fetched from backend) --- */
+  useEffect(() => {
+    if (!activeRepo) { setExamples([]); return }
+    let cancelled = false
+    fetch(`${API_URL}/examples/${encodeURIComponent(activeRepo)}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(data => {
+        if (cancelled) return
+        setExamples(Array.isArray(data.questions) ? data.questions : [])
+      })
+      .catch(() => { if (!cancelled) setExamples([]) })
+    return () => { cancelled = true }
+  }, [activeRepo])
 
   /* --- Cmd/Ctrl+K to focus search --- */
   useEffect(() => {
@@ -265,10 +291,9 @@ export default function App() {
 
       if (data.status === "done") {
         const repoName = data.repo_name || inferRepoNameFromUrl(job?.githubUrl || "")
-        if (repoName) {
-          setRepos(prev => prev.includes(repoName) ? prev : [...prev, repoName])
-          setActiveRepo(repoName)
-        }
+        // refetch the canonical list from backend, then activate the new repo
+        await fetchRepos()
+        if (repoName) setActiveRepo(repoName)
       }
       return data
     } catch (e) {
@@ -276,7 +301,7 @@ export default function App() {
       setJob(j => j ? { ...j, _pollError: e.message } : j)
       return null
     }
-  }, [job?.githubUrl])
+  }, [job?.githubUrl, fetchRepos])
 
   useEffect(() => {
     if (!job?.jobId) return
@@ -290,8 +315,11 @@ export default function App() {
 
   /* --- actions --- */
 
-  const startIndex = async () => {
-    const url = githubUrl.trim()
+  const startIndex = async (urlOverride) => {
+    // urlOverride is a string passed by quick-start buttons. Click events pass an Event,
+    // which we ignore — only respect string overrides.
+    const sourceUrl = (typeof urlOverride === "string" ? urlOverride : githubUrl)
+    const url = sourceUrl.trim()
     setIndexError(null)
     if (!isValidGithubUrl(url)) {
       setIndexError("Please paste a valid GitHub URL like https://github.com/owner/repo")
@@ -355,18 +383,13 @@ export default function App() {
 
   const dismissJob = () => {
     setJob(null)
-    setView("query")
-  }
-
-  const removeRepo = (repoName) => {
-    if (repoName === DEFAULT_REPO) return // don't allow removing default
-    setRepos(prev => prev.filter(r => r !== repoName))
-    if (activeRepo === repoName) setActiveRepo(DEFAULT_REPO)
+    // refetch the canonical repos list defensively, in case the polling tick that flipped
+    // status to "done" was missed for any reason (offline, throttling, etc).
+    fetchRepos()
+    setView(repos.length > 0 ? "query" : "index")
   }
 
   /* ------------------------------ render ------------------------------ */
-
-  const examples = EXAMPLES_BY_REPO[activeRepo] || EXAMPLES_BY_REPO.__default
 
   return (
     <div className="app">
@@ -375,7 +398,6 @@ export default function App() {
         activeRepo={activeRepo}
         onSelectRepo={(r) => { setActiveRepo(r); setView("query") }}
         onAddRepo={() => setView("index")}
-        onRemoveRepo={removeRepo}
         view={view}
         offline={!!error}
       />
@@ -400,13 +422,15 @@ export default function App() {
           onSubmit={startIndex}
           onCancel={() => setView("query")}
           existingRepos={repos}
+          activeRepo={activeRepo}
+          onSelectRepo={(r) => { setActiveRepo(r); setView("query") }}
         />
       )}
 
       {view === "progress" && job && (
         <ProgressView
           job={job}
-          onDone={() => setView("query")}
+          onDone={() => { setJob(null); fetchRepos(); setView("query") }}
           onCancel={dismissJob}
         />
       )}
@@ -420,7 +444,7 @@ export default function App() {
    TopNav (with repo selector dropdown)
    ============================================================================ */
 
-function TopNav({ repos, activeRepo, onSelectRepo, onAddRepo, onRemoveRepo, view, offline }) {
+function TopNav({ repos, activeRepo, onSelectRepo, onAddRepo, view, offline }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -439,55 +463,49 @@ function TopNav({ repos, activeRepo, onSelectRepo, onAddRepo, onRemoveRepo, view
         </div>
 
         <div className="nav-actions">
-          <div className="repo-select" ref={ref}>
-            <button
-              className="repo-trigger"
-              onClick={() => setOpen(o => !o)}
-              aria-haspopup="menu"
-              aria-expanded={open}
-              title="Switch repository"
-            >
-              <Icon.Github style={{ width: 13, height: 13, color: "var(--text-dim)" }} />
-              <span className="repo-name">{activeRepo}</span>
-              <Icon.ChevronDown style={{ width: 12, height: 12, color: "var(--text-muted)" }} />
-            </button>
-            {open && (
-              <div className="repo-menu" role="menu">
-                <div className="repo-menu-label">Indexed repos</div>
-                {repos.map((r) => (
-                  <div key={r} className={`repo-menu-item ${r === activeRepo ? "active" : ""}`}>
-                    <button
-                      className="repo-menu-pick"
-                      onClick={() => { onSelectRepo(r); setOpen(false) }}
-                      role="menuitemradio"
-                      aria-checked={r === activeRepo}
-                    >
-                      <span className="repo-menu-tick">{r === activeRepo ? <Icon.Check /> : null}</span>
-                      <Icon.Github style={{ width: 12, height: 12, opacity: 0.7 }} />
-                      <span>{r}</span>
-                    </button>
-                    {r !== DEFAULT_REPO && (
+          {repos.length > 0 && (
+            <div className="repo-select" ref={ref}>
+              <button
+                className="repo-trigger"
+                onClick={() => setOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                title="Switch repository"
+              >
+                <Icon.Github style={{ width: 13, height: 13, color: "var(--text-dim)" }} />
+                <span className="repo-name">{activeRepo || "pick a repo"}</span>
+                <Icon.ChevronDown style={{ width: 12, height: 12, color: "var(--text-muted)" }} />
+              </button>
+              {open && (
+                <div className="repo-menu" role="menu">
+                  <div className="repo-menu-label">Indexed repos</div>
+                  {repos.map((r) => (
+                    <div key={r} className={`repo-menu-item ${r === activeRepo ? "active" : ""}`}>
                       <button
-                        className="repo-menu-remove"
-                        onClick={(e) => { e.stopPropagation(); onRemoveRepo(r) }}
-                        title="Remove from list"
-                        aria-label={`Remove ${r}`}
-                      >×</button>
-                    )}
-                  </div>
-                ))}
-                <div className="repo-menu-divider" />
-                <button
-                  className="repo-menu-pick repo-menu-add"
-                  onClick={() => { onAddRepo(); setOpen(false) }}
-                  role="menuitem"
-                >
-                  <Icon.Plus style={{ width: 13, height: 13 }} />
-                  <span>Index a new repo</span>
-                </button>
-              </div>
-            )}
-          </div>
+                        className="repo-menu-pick"
+                        onClick={() => { onSelectRepo(r); setOpen(false) }}
+                        role="menuitemradio"
+                        aria-checked={r === activeRepo}
+                      >
+                        <span className="repo-menu-tick">{r === activeRepo ? <Icon.Check /> : null}</span>
+                        <Icon.Github style={{ width: 12, height: 12, opacity: 0.7 }} />
+                        <span>{r}</span>
+                      </button>
+                    </div>
+                  ))}
+                  <div className="repo-menu-divider" />
+                  <button
+                    className="repo-menu-pick repo-menu-add"
+                    onClick={() => { onAddRepo(); setOpen(false) }}
+                    role="menuitem"
+                  >
+                    <Icon.Plus style={{ width: 13, height: 13 }} />
+                    <span>Index a new repo</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {view !== "index" && (
             <button className="btn-outline" onClick={onAddRepo} title="Index a new GitHub repo">
@@ -515,7 +533,7 @@ function QueryView({
   question, setQuestion, focused, setFocused,
   loading, error, result, elapsed,
   copied, copyAnswer,
-  onSubmit, inputRef, onAddRepo,
+  onSubmit, inputRef,
 }) {
   return (
     <>
@@ -528,10 +546,6 @@ function QueryView({
           Ask your codebase. <br />
           <span className="grad">Get the full picture.</span>
         </h1>
-        <p className="hero-sub">
-          CodeWeave indexes functions, calls, modules, docs, and tests into a context graph —
-          ask what breaks, what depends on what, and what a piece of code actually does.
-        </p>
 
         <div className={`search-wrap ${focused ? "focused" : ""}`}>
           <div className="search-glow" aria-hidden />
@@ -561,9 +575,9 @@ function QueryView({
           </div>
         </div>
 
-        {!result && !loading && !error && (
+        {!result && !loading && !error && examples.length > 0 && (
           <div className="examples">
-            <div className="examples-label">Try one of these</div>
+            <div className="examples-label">Try a question for {activeRepo}</div>
             {examples.map((ex) => (
               <button key={ex} className="chip" onClick={() => onSubmit(ex)}>
                 <Icon.Sparkle />
@@ -590,28 +604,8 @@ function QueryView({
         {result && !loading && (
           <ResultCard result={result} elapsed={elapsed} copied={copied} onCopy={copyAnswer} />
         )}
-
-        {!result && !loading && !error && (
-          <div className="features">
-            <Feature icon={<Icon.Graph />} title="Context graph" desc="Functions, calls, modules, docs and tests stitched together — trace impact across the whole repo." />
-            <Feature icon={<Icon.Brain />} title="Semantic search" desc="Embedding-backed lookup means you don't need exact names — describe the behavior you want." />
-            <Feature icon={<Icon.Code />} title="Plain-English answers" desc='Ask "what breaks if I change X?" and get a grounded summary backed by real graph nodes.' />
-            <Feature icon={<Icon.Plus />} title="Any GitHub repo" desc="Paste a URL and CodeWeave will clone, parse, embed, and serve it." onClick={onAddRepo} cta="Index one →" />
-          </div>
-        )}
       </section>
     </>
-  )
-}
-
-function Feature({ icon, title, desc, onClick, cta }) {
-  return (
-    <div className={`feature ${onClick ? "feature-clickable" : ""}`} onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}>
-      <span className="icon">{icon}</span>
-      <h3>{title}</h3>
-      <p>{desc}</p>
-      {cta && <span className="feature-cta">{cta}</span>}
-    </div>
   )
 }
 
@@ -674,15 +668,20 @@ function ResultCard({ result, elapsed, copied, onCopy }) {
    IndexView — paste GitHub URL, click "Index"
    ============================================================================ */
 
-function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, onCancel, existingRepos }) {
+function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, onCancel, existingRepos, activeRepo, onSelectRepo }) {
   const inferredName = inferRepoNameFromUrl(githubUrl)
   const alreadyIndexed = inferredName && existingRepos.includes(inferredName)
+  const showBack = existingRepos.length > 0   // only show back when there's somewhere to go back to
+  const noRepos = existingRepos.length === 0
+  const fastApiAlreadyIndexed = existingRepos.includes("fastapi")
 
   return (
     <section className="container index-view">
-      <div className="index-eyebrow">
-        <button className="btn-link" onClick={onCancel}>← Back</button>
-      </div>
+      {showBack && (
+        <div className="index-eyebrow">
+          <button className="btn-link" onClick={onCancel}>← Back to query</button>
+        </div>
+      )}
 
       <h1 className="hero-title" style={{ textAlign: "center", fontSize: "clamp(28px, 5vw, 44px)" }}>
         Index a <span className="grad">GitHub repo</span>
@@ -743,6 +742,53 @@ function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, on
           </div>
         </div>
       </div>
+
+      {noRepos && !fastApiAlreadyIndexed && (
+        <button
+          className="try-fastapi"
+          onClick={() => onSubmit(FASTAPI_URL)}
+          disabled={indexing}
+          title="Index github.com/fastapi/fastapi"
+        >
+          <span className="try-fastapi-icon" aria-hidden><Icon.Github /></span>
+          <span className="try-fastapi-body">
+            <span className="try-fastapi-label">Try with FastAPI</span>
+            <span className="try-fastapi-url">github.com/fastapi/fastapi</span>
+          </span>
+          <Icon.ArrowRight className="try-fastapi-arrow" />
+        </button>
+      )}
+
+      {existingRepos.length > 0 && (
+        <div className="indexed-repos">
+          <div className="indexed-repos-head">
+            <span className="indexed-repos-label">
+              Or open an indexed repository
+            </span>
+            <span className="indexed-repos-count">{existingRepos.length} {existingRepos.length === 1 ? "repo" : "repos"}</span>
+          </div>
+          <ul className="indexed-repos-list">
+            {existingRepos.map((repo) => (
+              <li key={repo} className={`indexed-repo-item ${repo === activeRepo ? "active" : ""}`}>
+                <button
+                  className="indexed-repo-pick"
+                  onClick={() => onSelectRepo(repo)}
+                >
+                  <span className="indexed-repo-icon" aria-hidden>
+                    <Icon.Github />
+                  </span>
+                  <span className="indexed-repo-name">{repo}</span>
+                  {repo === activeRepo && (
+                    <span className="indexed-repo-tag accent">active</span>
+                  )}
+                  <span className="indexed-repo-spacer" />
+                  <Icon.ArrowRight className="indexed-repo-arrow" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

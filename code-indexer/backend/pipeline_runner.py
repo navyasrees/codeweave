@@ -14,7 +14,10 @@ from backend.indexer_job import update_job
 import json
 
 
-ARTIFACTS_DIR = Path("artifacts")
+# Resolve absolutely so the location is independent of shell cwd.
+# This MUST match backend/main.py's ARTIFACTS_DIR — both files canonicalise
+# to <project_root>/artifacts where project_root = code-indexer/.
+ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
 
 def run_pipeline(job_id: str, github_url: str):
