@@ -38,7 +38,7 @@ def ask_llm(question: str, context: str, mode: str) -> str:
             - Then explain how they relate to each other
             - End with: which file to start reading if you want to understand this concept"""
 
-                prompt = f"""You are a senior engineer doing a code review on a Python codebase.
+        prompt = f"""You are a senior engineer doing a code review on a Python codebase.
             You have been given a structured extract of the codebase as context.
             Answer only from what is in the context — do not hallucinate modules or functions that are not listed.
             If the context does not contain enough information to answer, say exactly: "The codebase context doesn't have enough information to answer this confidently."
@@ -77,7 +77,7 @@ def load_resources(repo_name: str = "fastapi"):
         G = pickle.load(f)
 
     client = chromadb.PersistentClient(path=chroma_path)
-    collection = client.get_collection("codebase")
+    collection = client.get_collection(repo_name) 
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
     return G, collection, model
@@ -171,6 +171,8 @@ def build_context(context_nodes: dict) -> str:
         if data.get("github_issues"):
             issues = [i["title"] for i in data["github_issues"][:2]]
             parts.append(f"  issues: {', '.join(issues)}")
+        if data.get("snippet"):
+            parts.append(f"  code:\n{data['snippet'][:500]}")
         
         lines.append("\n".join(parts))
     

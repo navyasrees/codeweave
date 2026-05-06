@@ -95,6 +95,12 @@ def walk(
 
     if node.type == "function_definition":
         name_node = node.child_by_field_name("name")
+        # extract source snippet — cap at 30 lines
+        start = node.start_point[0]
+        end = node.end_point[0]
+        source_lines = source_code.decode("utf8").splitlines()
+        snippet = "\n".join(source_lines[start:min(end+1, start+30)])
+        
         function_info = {
             "type": "function",
             "name": node_text(source_code, name_node) if name_node else None,
@@ -106,11 +112,8 @@ def walk(
             "docstring": extract_docstring(source_code, node),
             "calls": collect_calls(source_code, node),
             "line_range": [node.start_point[0] + 1, node.end_point[0] + 1],
+            "snippet": snippet,   # ← add this
         }
-        functions.append(function_info)
-        for child in node.children:
-            walk(source_code, child, functions, file_path, module_name, parent_class)
-        return
 
     if node.type == "class_definition":
         name_node = node.child_by_field_name("name")

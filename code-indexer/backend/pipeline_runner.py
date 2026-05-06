@@ -76,7 +76,7 @@ def run_pipeline(job_id: str, github_url: str):
         # Step 6 — embed
         update_job(job_id, "embedding", "Embedding nodes into vector store...")
         chroma_path = str(artifact_dir / "chroma")
-        embed_and_store(graph_file, chroma_path)
+        embed_and_store(graph_file, chroma_path, collection_name=repo_name)
 
         update_job(job_id, "done", "Indexing complete.", repo_name=repo_name)
 

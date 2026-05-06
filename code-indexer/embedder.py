@@ -32,7 +32,7 @@ def node_to_text(node_id, data):
     return " | ".join(parts)
 
 
-def embed_and_store(graph_path, chroma_path="code-indexer/chroma"):
+def embed_and_store(graph_path, chroma_path="code-indexer/chroma",collection_name="codebase"):
     with open(graph_path, "rb") as f:
         G = pickle.load(f)
     
@@ -41,11 +41,11 @@ def embed_and_store(graph_path, chroma_path="code-indexer/chroma"):
     
     # delete collection if exists to avoid duplicates on re-run
     try:
-        client.delete_collection("codebase")
+        client.delete_collection(collection_name)
     except:
         pass
-    
-    collection = client.create_collection("codebase")
+
+    collection = client.create_collection(collection_name)
     
     ids = []
     texts = []
