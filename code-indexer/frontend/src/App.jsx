@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react"
+import { createElement, useEffect, useRef, useState, useCallback } from "react"
 import "./App.css"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
@@ -83,6 +83,104 @@ function inferRepoNameFromUrl(url) {
 function isValidGithubUrl(url) {
   if (!url) return false
   return /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(url.trim())
+}
+
+/* ------------------------------ tiny markdown renderer ------------------------------
+   Handles the subset LLMs typically emit: headings (##, ###, ####),
+   bold (**x**), inline code (`x`), fenced code blocks (```),
+   ordered/unordered lists, paragraphs, and links [t](u).
+*/
+
+function renderInline(text) {
+  // ordered: code spans, bold, links — first-match-wins
+  const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[([^\]]+)\]\(([^)]+)\))/
+  const out = []
+  let remaining = text
+  let key = 0
+  while (remaining.length) {
+    const m = remaining.match(pattern)
+    if (!m) { out.push(remaining); break }
+    if (m.index > 0) out.push(remaining.slice(0, m.index))
+    const matched = m[0]
+    if (matched.startsWith("`")) {
+      out.push(<code key={key++}>{matched.slice(1, -1)}</code>)
+    } else if (matched.startsWith("**")) {
+      out.push(<strong key={key++}>{matched.slice(2, -2)}</strong>)
+    } else if (matched.startsWith("[")) {
+      out.push(<a key={key++} href={m[5]} target="_blank" rel="noreferrer">{m[4]}</a>)
+    }
+    remaining = remaining.slice(m.index + matched.length)
+  }
+  return out
+}
+
+function renderMarkdown(text) {
+  if (!text) return null
+  const lines = text.split("\n")
+  const out = []
+  let i = 0
+  let key = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // fenced code block
+    if (/^```/.test(line)) {
+      const codeLines = []
+      i++
+      while (i < lines.length && !/^```/.test(lines[i])) { codeLines.push(lines[i]); i++ }
+      i++ // closing fence
+      out.push(<pre key={key++}><code>{codeLines.join("\n")}</code></pre>)
+      continue
+    }
+
+    // heading
+    const h = line.match(/^(#{1,4})\s+(.*)$/)
+    if (h) {
+      const level = h[1].length        // 1..4
+      const tag = `h${Math.min(level + 1, 4)}`  // ## -> h3, ### -> h4, etc; # -> h2
+      out.push(createElement(tag, { key: key++ }, renderInline(h[2])))
+      i++; continue
+    }
+
+    // ordered list
+    if (/^\s*\d+\.\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^\s*\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+\.\s/, ""))
+        i++
+      }
+      out.push(<ol key={key++}>{items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}</ol>)
+      continue
+    }
+
+    // unordered list
+    if (/^\s*[-*]\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*]\s/, ""))
+        i++
+      }
+      out.push(<ul key={key++}>{items.map((it, j) => <li key={j}>{renderInline(it)}</li>)}</ul>)
+      continue
+    }
+
+    // blank line — skip
+    if (line.trim() === "") { i++; continue }
+
+    // paragraph — collect consecutive non-blank, non-special lines
+    const paraLines = []
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !/^(#{1,4}\s|```|\s*[-*]\s|\s*\d+\.\s)/.test(lines[i])
+    ) {
+      paraLines.push(lines[i]); i++
+    }
+    out.push(<p key={key++}>{renderInline(paraLines.join(" "))}</p>)
+  }
+
+  return out
 }
 
 /* ============================================================================
@@ -566,7 +664,7 @@ function ResultCard({ result, elapsed, copied, onCopy }) {
           </span>
           <span className="title">answer · {result.mode}</span>
         </div>
-        <div className="answer-body">{result.answer}</div>
+        <div className="answer-body markdown">{renderMarkdown(result.answer)}</div>
       </div>
     </div>
   )

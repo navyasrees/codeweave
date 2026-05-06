@@ -446,18 +446,76 @@
   color: var(--text);
   font-size: 15px;
   line-height: 1.72;
-  white-space: pre-wrap;
   word-wrap: break-word;
 }
-.answer-body code, .answer-body .code {
+
+/* ----- markdown elements inside .answer-body ----- */
+.answer-body p { margin: 0 0 12px; }
+.answer-body p:last-child { margin-bottom: 0; }
+
+.answer-body h2,
+.answer-body h3,
+.answer-body h4 {
+  color: var(--text-hi);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 22px 0 8px;
+}
+.answer-body h2 { font-size: 19px; }
+.answer-body h3 { font-size: 16px; }
+.answer-body h4 { font-size: 14px; }
+.answer-body > h2:first-child,
+.answer-body > h3:first-child,
+.answer-body > h4:first-child { margin-top: 0; }
+
+.answer-body strong { color: var(--text-hi); font-weight: 600; }
+
+.answer-body ul,
+.answer-body ol {
+  margin: 4px 0 14px;
+  padding-left: 22px;
+}
+.answer-body li { margin-bottom: 6px; }
+.answer-body li::marker { color: var(--accent); }
+.answer-body li:last-child { margin-bottom: 0; }
+.answer-body li > p { margin: 0; display: inline; }
+
+.answer-body code,
+.answer-body .code {
   font-family: var(--mono);
-  font-size: 13.5px;
-  padding: 2px 7px;
+  font-size: 13px;
+  padding: 1.5px 6px;
   border-radius: 5px;
   background: rgba(167, 139, 250, 0.10);
   color: var(--accent);
   border: 1px solid var(--accent-border);
 }
+
+.answer-body pre {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.answer-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: inherit;
+}
+
+.answer-body a {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-decoration-color: rgba(34, 211, 238, 0.4);
+  text-underline-offset: 2px;
+}
+.answer-body a:hover { text-decoration-color: var(--accent-2); }
 
 /* =========================================================
    Loading skeleton
