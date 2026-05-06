@@ -156,7 +156,7 @@ def module_from_path(file_path):
     return ".".join(parts)
 
 
-def index_fastapi(base_dir: Path):
+def index_repo(base_dir: Path):
     functions = []
     import_records = []
 

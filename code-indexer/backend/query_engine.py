@@ -49,15 +49,18 @@ def ask_llm(question: str, context: str, mode: str) -> str:
     
     return response.choices[0].message.content
 
-def load_resources():
-    with open(GRAPH_PATH, "rb") as f:
+def load_resources(repo_name: str = "fastapi"):
+    artifact_dir = Path("artifacts") / repo_name
+    graph_path = artifact_dir / "graph.pkl"
+    chroma_path = str(artifact_dir / "chroma")
+
+    with open(graph_path, "rb") as f:
         G = pickle.load(f)
-    
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
+
+    client = chromadb.PersistentClient(path=chroma_path)
     collection = client.get_collection("codebase")
-    
     model = SentenceTransformer("all-MiniLM-L6-v2")
-    
+
     return G, collection, model
 
 def guardrail(results, mode):
