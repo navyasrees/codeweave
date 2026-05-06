@@ -55,6 +55,12 @@ def embed_and_store(graph_path, chroma_path="code-indexer/chroma", collection_na
     metadatas = []
     
     for node_id, data in G.nodes(data=True):
+        if data.get("type") == "test":
+            continue
+        if not data.get("type"):
+            continue
+        if not data.get("name"):
+            continue
         text = node_to_text(node_id, data)
         ids.append(node_id)
         texts.append(text)

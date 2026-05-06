@@ -99,7 +99,7 @@ def detect_mode(question: str) -> str:
             return "blast_radius"
     return "semantic"
 
-def semantic_search(question, collection, G, vo, top_k=5):
+def semantic_search(question, collection, G, vo, top_k=30):
     result = vo.embed([question], model="voyage-code-2", input_type="query")
     embedding = result.embeddings[0]
 
@@ -109,18 +109,36 @@ def semantic_search(question, collection, G, vo, top_k=5):
         include=["distances"]
     )
 
+    guardrail(results, 'semantic_search')
+
+
     node_ids = results["ids"][0]
     distances = results["distances"][0]
 
+    seen_names = set()
     context_nodes = {}
+
     for node_id, distance in zip(node_ids, distances):
-        if distance > 0.8:
+        if distance > 0.65:
             continue
-        if node_id in G.nodes:
-            context_nodes[node_id] = G.nodes[node_id]
-            for neighbor in list(G.successors(node_id)) + list(G.predecessors(node_id)):
-                if neighbor in G.nodes:
-                    context_nodes[neighbor] = G.nodes[neighbor]
+        if node_id not in G.nodes:
+            continue
+        data = G.nodes[node_id]
+        if not data.get("type"):
+            continue
+        name = data.get("name", node_id)
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        context_nodes[node_id] = data
+
+        for neighbor in list(G.successors(node_id)) + list(G.predecessors(node_id)):
+            if neighbor not in G.nodes:
+                continue
+            neighbor_data = G.nodes[neighbor]
+            if not neighbor_data.get("type"):
+                continue
+            context_nodes[neighbor] = neighbor_data
 
     return context_nodes
 

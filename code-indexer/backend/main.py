@@ -53,8 +53,16 @@ class IndexRequest(BaseModel):
 @app.post("/index")
 def start_index(request: IndexRequest):
     job_id = create_job()
+    
+    def run_and_clear(job_id, github_url):
+        run_pipeline(job_id, github_url)
+        # clear cache so next query reloads fresh collection
+        repo_name = get_job(job_id).get("repo_name")
+        if repo_name and repo_name in resources_cache:
+            del resources_cache[repo_name]
+    
     thread = threading.Thread(
-        target=run_pipeline,
+        target=run_and_clear,
         args=(job_id, request.github_url),
         daemon=True,
     )
