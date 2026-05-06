@@ -17,36 +17,55 @@ BLAST_RADIUS_KEYWORDS = [
     "depends", "impact", "impacts", "what happens if"
 ]
 
-
 def ask_llm(question: str, context: str, mode: str) -> str:
     load_dotenv()
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    
-    mode_hint = (
-        "The user wants to know the blast radius — what breaks if something changes."
-        if mode == "blast_radius"
-        else "The user wants to find code related to a concept."
-    )
-    
-    prompt = f"""You are a code intelligence assistant for a Python codebase.
 
-    {mode_hint}
+    if mode == "blast_radius":
+        mode_instruction = """The user wants to understand the blast radius of a change.
+            Your job:
+            - List every function and class that would be directly or indirectly affected
+            - For each, explain WHY it would break — not just that it calls the changed thing
+            - Group by: direct callers, indirect callers, modules affected
+            - Be specific about what argument, return value, or behavior change would cause the break
+            - If something would NOT break, say so clearly"""
 
-    Here is the relevant code context retrieved from the codebase graph:
+    else:
+        mode_instruction = """The user wants to find code related to a concept.
+            Your job:
+            - List the most relevant functions and classes, ranked by relevance
+            - For each entry include: function name, file path, one-line description of what it does
+            - Then explain how they relate to each other
+            - End with: which file to start reading if you want to understand this concept"""
 
-    {context}
+                prompt = f"""You are a senior engineer doing a code review on a Python codebase.
+            You have been given a structured extract of the codebase as context.
+            Answer only from what is in the context — do not hallucinate modules or functions that are not listed.
+            If the context does not contain enough information to answer, say exactly: "The codebase context doesn't have enough information to answer this confidently."
 
-    User question: {question}
+            {mode_instruction}
 
-    Answer clearly and specifically based on the context above. Reference function names, modules, and files where relevant.
-    If the context provided is not relevant to the question, say "I don't have enough information in the codebase to answer that" instead of making something up."""
+            FORMAT RULES:
+            - Use clear sections with headers
+            - For each function/class: show name, file, and a one-line description
+            - Be specific — name actual functions, files, line numbers if available
+            - Do not repeat the same point twice
+            - Do not hedge with phrases like "might be", "could be", "it's hard to say"
+
+            CODEBASE CONTEXT:
+            {context}
+
+            QUESTION: {question}
+
+            ANSWER:"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000,
+        max_tokens=1500,
+        temperature=0.1,
     )
-    
+
     return response.choices[0].message.content
 
 def load_resources(repo_name: str = "fastapi"):
