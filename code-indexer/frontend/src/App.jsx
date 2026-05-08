@@ -53,6 +53,9 @@ const Icon = {
   Clock:     p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>,
   Graph:     p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M8 7l8 9M8 17l8-9M6 8.5v7M18 8.5v7" /></svg>,
   Brain:     p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 5a3 3 0 0 0-6 0 3 3 0 0 0-3 3 3 3 0 0 0 1 2.2v.8a3 3 0 0 0 1 2.2v.8a3 3 0 0 0 6 0M12 5a3 3 0 0 1 6 0 3 3 0 0 1 3 3 3 3 0 0 1-1 2.2v.8a3 3 0 0 1-1 2.2v.8a3 3 0 0 1-6 0M12 5v14" /></svg>,
+  Upload:    p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>,
+  Folder:    p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>,
+  X:         p => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>,
 }
 
 /* ------------------------------ helpers ------------------------------ */
@@ -346,6 +349,43 @@ export default function App() {
     }
   }
 
+  const startUpload = async (file) => {
+    setIndexError(null)
+    if (!file) {
+      setIndexError("Please choose a .zip file first")
+      return
+    }
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      setIndexError("Only .zip archives are supported")
+      return
+    }
+    setIndexing(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch(`${API_URL}/index/upload`, {
+        method: "POST",
+        body: formData,
+      })
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      if (!data.job_id) throw new Error("Backend did not return a job_id")
+
+      setJob({
+        jobId: data.job_id,
+        uploadName: data.repo_name || file.name.replace(/\.zip$/i, ""),
+        status: "pending",
+        message: "Job created",
+      })
+      setView("progress")
+    } catch (e) {
+      setIndexError(e.message || "Failed to upload")
+    } finally {
+      setIndexing(false)
+    }
+  }
+
   const handleQuery = async (q) => {
     const text = (q ?? question).trim()
     if (!text) return
@@ -420,6 +460,7 @@ export default function App() {
           githubUrl={githubUrl} setGithubUrl={setGithubUrl}
           indexing={indexing} indexError={indexError}
           onSubmit={startIndex}
+          onUpload={startUpload}
           onCancel={() => setView("query")}
           existingRepos={repos}
           activeRepo={activeRepo}
@@ -668,12 +709,30 @@ function ResultCard({ result, elapsed, copied, onCopy }) {
    IndexView — paste GitHub URL, click "Index"
    ============================================================================ */
 
-function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, onCancel, existingRepos, activeRepo, onSelectRepo }) {
+function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, onUpload, onCancel, existingRepos, activeRepo, onSelectRepo }) {
   const inferredName = inferRepoNameFromUrl(githubUrl)
   const alreadyIndexed = inferredName && existingRepos.includes(inferredName)
   const showBack = existingRepos.length > 0   // only show back when there's somewhere to go back to
   const noRepos = existingRepos.length === 0
   const fastApiAlreadyIndexed = existingRepos.includes("fastapi")
+
+  // mode = "url" | "upload"
+  const [mode, setMode] = useState("url")
+  const [uploadFile, setUploadFile] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleFiles = (files) => {
+    if (!files || !files.length) return
+    setUploadFile(files[0])
+  }
+  const onDrop = (e) => {
+    e.preventDefault(); setDragOver(false)
+    handleFiles(e.dataTransfer.files)
+  }
+
+  const uploadInferredName = uploadFile ? uploadFile.name.replace(/\.zip$/i, "") : ""
+  const uploadAlreadyIndexed = uploadInferredName && existingRepos.includes(uploadInferredName)
 
   return (
     <section className="container index-view">
@@ -684,41 +743,138 @@ function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, on
       )}
 
       <h1 className="hero-title" style={{ textAlign: "center", fontSize: "clamp(28px, 5vw, 44px)" }}>
-        Index a <span className="grad">GitHub repo</span>
+        Index a <span className="grad">{mode === "url" ? "GitHub repo" : "local folder"}</span>
       </h1>
       <p className="hero-sub" style={{ textAlign: "center", margin: "12px auto 28px" }}>
-        Paste a public GitHub repository URL. CodeWeave will clone it, parse the source,
-        build a context graph, and embed it for semantic search.
+        {mode === "url"
+          ? "Paste a public GitHub URL. CodeWeave will clone it, parse the source, build a context graph, and embed it."
+          : "Drop a .zip of your project folder. CodeWeave will extract it, parse the source, and build the same context graph."}
       </p>
 
       <div className="index-card">
-        <label className="index-label" htmlFor="ghurl">GitHub URL</label>
-        <div className={`search ${indexing ? "" : ""}`} style={{ marginTop: 6 }}>
-          <Icon.Github className="search-icon" style={{ color: "var(--text-dim)" }} />
-          <input
-            id="ghurl"
-            className="search-input"
-            placeholder="https://github.com/owner/repo"
-            value={githubUrl}
-            onChange={(e) => setGithubUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSubmit()}
-            disabled={indexing}
-            autoFocus
-          />
+        <div className="mode-tabs" role="tablist" aria-label="Source type">
           <button
-            className="btn-ask"
-            onClick={onSubmit}
-            disabled={indexing || !githubUrl.trim()}
+            role="tab"
+            aria-selected={mode === "url"}
+            className={`mode-tab ${mode === "url" ? "active" : ""}`}
+            onClick={() => setMode("url")}
+            disabled={indexing}
           >
-            {indexing ? (<><span className="spinner" /> Starting…</>) : (<>Index <Icon.ArrowRight /></>)}
+            <Icon.Github />
+            <span>GitHub URL</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={mode === "upload"}
+            className={`mode-tab ${mode === "upload" ? "active" : ""}`}
+            onClick={() => setMode("upload")}
+            disabled={indexing}
+          >
+            <Icon.Folder />
+            <span>Upload folder</span>
           </button>
         </div>
 
-        {inferredName && (
-          <div className="index-meta">
-            Will index as <span className="code">{inferredName}</span>
-            {alreadyIndexed && <span className="index-warn"> · already in your list — re-indexing will refresh it</span>}
-          </div>
+        {mode === "url" && (
+          <>
+            <label className="index-label" htmlFor="ghurl">GitHub URL</label>
+            <div className="search" style={{ marginTop: 6 }}>
+              <Icon.Github className="search-icon" style={{ color: "var(--text-dim)" }} />
+              <input
+                id="ghurl"
+                className="search-input"
+                placeholder="https://github.com/owner/repo"
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+                disabled={indexing}
+                autoFocus
+              />
+              <button
+                className="btn-ask"
+                onClick={onSubmit}
+                disabled={indexing || !githubUrl.trim()}
+              >
+                {indexing ? (<><span className="spinner" /> Starting…</>) : (<>Index <Icon.ArrowRight /></>)}
+              </button>
+            </div>
+
+            {inferredName && (
+              <div className="index-meta">
+                Will index as <span className="code">{inferredName}</span>
+                {alreadyIndexed && <span className="index-warn"> · already in your list — re-indexing will refresh it</span>}
+              </div>
+            )}
+          </>
+        )}
+
+        {mode === "upload" && (
+          <>
+            <label className="index-label">Project ZIP</label>
+            <div
+              className={`dropzone ${dragOver ? "drag-over" : ""} ${uploadFile ? "has-file" : ""}`}
+              onClick={() => !indexing && fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click() }}
+              aria-label="Drop a ZIP file or click to browse"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".zip,application/zip,application/x-zip-compressed"
+                style={{ display: "none" }}
+                onChange={(e) => handleFiles(e.target.files)}
+                disabled={indexing}
+              />
+              {uploadFile ? (
+                <div className="dropzone-file">
+                  <span className="dropzone-icon"><Icon.Folder /></span>
+                  <div className="dropzone-file-meta">
+                    <span className="dropzone-file-name">{uploadFile.name}</span>
+                    <span className="dropzone-file-size">{(uploadFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                  </div>
+                  <button
+                    className="dropzone-clear"
+                    onClick={(e) => { e.stopPropagation(); setUploadFile(null) }}
+                    title="Remove"
+                    aria-label="Remove selected file"
+                    disabled={indexing}
+                  >
+                    <Icon.X />
+                  </button>
+                </div>
+              ) : (
+                <div className="dropzone-empty">
+                  <span className="dropzone-icon"><Icon.Upload /></span>
+                  <div className="dropzone-text">
+                    <span className="dropzone-title">Drop a .zip here</span>
+                    <span className="dropzone-sub">or click to browse</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="upload-actions">
+              <button
+                className="btn-ask"
+                onClick={() => onUpload(uploadFile)}
+                disabled={indexing || !uploadFile}
+              >
+                {indexing ? (<><span className="spinner" /> Uploading…</>) : (<>Upload &amp; index <Icon.ArrowRight /></>)}
+              </button>
+            </div>
+
+            {uploadInferredName && (
+              <div className="index-meta">
+                Will index as <span className="code">{uploadInferredName}</span>
+                {uploadAlreadyIndexed && <span className="index-warn"> · already in your list — re-indexing will refresh it</span>}
+              </div>
+            )}
+          </>
         )}
 
         {indexError && (
@@ -736,10 +892,17 @@ function IndexView({ githubUrl, setGithubUrl, indexing, indexError, onSubmit, on
             <Icon.Clock style={{ width: 13, height: 13 }} />
             <span>Indexing takes 1–10 minutes depending on repo size.</span>
           </div>
-          <div className="index-tip">
-            <Icon.Github style={{ width: 13, height: 13 }} />
-            <span>Public repositories only.</span>
-          </div>
+          {mode === "url" ? (
+            <div className="index-tip">
+              <Icon.Github style={{ width: 13, height: 13 }} />
+              <span>Public repositories only.</span>
+            </div>
+          ) : (
+            <div className="index-tip">
+              <Icon.Folder style={{ width: 13, height: 13 }} />
+              <span>ZIP archives only. Python sources work best.</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -801,7 +964,7 @@ function ProgressView({ job, onDone, onCancel }) {
   const currentIdx = STAGE_INDEX[job.status] ?? 0
   const isError = job.status === "error"
   const isDone = job.status === "done"
-  const repoLabel = job.repo_name || inferRepoNameFromUrl(job.githubUrl || "") || "repository"
+  const repoLabel = job.repo_name || inferRepoNameFromUrl(job.githubUrl || "") || job.uploadName || "repository"
 
   return (
     <section className="container progress-view">

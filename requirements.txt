@@ -9,3 +9,4 @@ PyGithub
 tree-sitter
 tree-sitter-python
 voyageai
+python-multipart

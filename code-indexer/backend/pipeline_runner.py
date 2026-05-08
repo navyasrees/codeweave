@@ -20,22 +20,44 @@ import json
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
 
-def run_pipeline(job_id: str, github_url: str):
+def run_pipeline(
+    job_id: str,
+    github_url: str = None,
+    source_path: str = None,
+    repo_name_override: str = None,
+):
+    """Run the indexing pipeline.
+
+    Provide one of:
+      - github_url: clone from GitHub, then index
+      - source_path + repo_name_override: skip clone, index an already-on-disk folder
+        (used by /index/upload after extracting a user-provided ZIP)
+    """
     try:
-        # Step 1 — clone
-        update_job(job_id, "cloning", f"Cloning {github_url}...")
-        repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "")
-        repo_path = ARTIFACTS_DIR / repo_name / "repo"
+        # Step 1 — get the source code on disk
+        if github_url:
+            update_job(job_id, "cloning", f"Cloning {github_url}...")
+            repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "")
+            repo_path = ARTIFACTS_DIR / repo_name / "repo"
 
-        if repo_path.exists():
-            shutil.rmtree(repo_path)
-        repo_path.mkdir(parents=True, exist_ok=True)
+            if repo_path.exists():
+                shutil.rmtree(repo_path)
+            repo_path.mkdir(parents=True, exist_ok=True)
 
-        subprocess.run(
-            ["git", "clone", github_url, str(repo_path)],
-            check=True,
-            capture_output=True,
-        )
+            subprocess.run(
+                ["git", "clone", github_url, str(repo_path)],
+                check=True,
+                capture_output=True,
+            )
+        elif source_path:
+            # Source already extracted to disk by the upload handler.
+            update_job(job_id, "cloning", "Reading uploaded folder...")
+            repo_path = Path(source_path)
+            repo_name = repo_name_override or repo_path.parent.name
+            if not repo_path.exists():
+                raise FileNotFoundError(f"Uploaded source path does not exist: {repo_path}")
+        else:
+            raise ValueError("run_pipeline requires either github_url or source_path")
 
         # Step 2 — detect structure
         update_job(job_id, "detecting", "Detecting repo structure...")

@@ -9,8 +9,10 @@ import voyageai
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
 
-# Load persisted artifacts from a stable absolute path (not CWD-dependent).
+# Legacy single-repo paths (kept for backwards compatibility — actual per-repo
+# resolution happens inside load_resources via ARTIFACTS_DIR / repo_name).
 GRAPH_PATH = BASE_DIR / "graph.pkl"
 CHROMA_PATH = str(BASE_DIR / "chroma")
 BLAST_RADIUS_KEYWORDS = [
@@ -72,7 +74,11 @@ def ask_llm(question: str, context: str, mode: str) -> str:
 def load_resources(repo_name: str = "fastapi"):
     load_dotenv()
     vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
-    artifact_dir = Path("artifacts") / repo_name
+    # Anchor to ARTIFACTS_DIR (absolute, file-location-relative) so this works
+    # regardless of where uvicorn is launched from. MUST stay in sync with
+    # backend/main.py and backend/pipeline_runner.py — all three resolve to
+    # <code-indexer>/artifacts/.
+    artifact_dir = ARTIFACTS_DIR / repo_name
     graph_path = artifact_dir / "graph.pkl"
     chroma_path = str(artifact_dir / "chroma")
 

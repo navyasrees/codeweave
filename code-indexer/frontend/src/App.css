@@ -1215,3 +1215,161 @@
   .try-fastapi-icon svg { width: 16px; height: 16px; }
   .try-fastapi-label { font-size: 13.5px; }
 }
+
+/* =========================================================
+   Mode tabs (URL / Upload toggle inside IndexView)
+   ========================================================= */
+.mode-tabs {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0 0 18px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+}
+.mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mode-tab svg { width: 13px; height: 13px; }
+.mode-tab:hover:not(:disabled) {
+  color: var(--text-hi);
+}
+.mode-tab.active {
+  background: var(--surface-hi);
+  color: var(--text-hi);
+}
+.mode-tab:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* =========================================================
+   Drop zone (Upload mode)
+   ========================================================= */
+.dropzone {
+  margin-top: 6px;
+  padding: 28px 22px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dropzone:hover { border-color: var(--accent-border); background: var(--surface); }
+.dropzone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dropzone.has-file {
+  border-style: solid;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  cursor: default;
+}
+
+.dropzone-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+.dropzone-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.dropzone-icon svg { width: 18px; height: 18px; }
+.dropzone.drag-over .dropzone-icon,
+.dropzone.has-file .dropzone-icon {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.dropzone-text {
+  display: flex;
+  flex-direction: column;
+}
+.dropzone-title {
+  color: var(--text-hi);
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.dropzone-sub {
+  color: var(--text-dim);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+.dropzone-file {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dropzone-file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.dropzone-file-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-hi);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dropzone-file-size {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.dropzone-clear {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.dropzone-clear svg { width: 12px; height: 12px; }
+.dropzone-clear:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.10);
+}
+
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .dropzone { padding: 20px 16px; }
+  .dropzone-empty { gap: 12px; }
+  .dropzone-icon { width: 34px; height: 34px; }
+  .upload-actions .btn-ask { width: 100%; justify-content: center; }
+}

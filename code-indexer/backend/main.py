@@ -1,6 +1,10 @@
 import sys
 import os
+import re
+import shutil
+import tempfile
 import threading
+import zipfile
 from pathlib import Path
 
 
@@ -9,7 +13,7 @@ from pathlib import Path
 # This avoids accidentally picking up a different `bootstrap.py` elsewhere in sys.path.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.query_engine import load_resources, query
@@ -57,14 +61,14 @@ class IndexRequest(BaseModel):
 @app.post("/index")
 def start_index(request: IndexRequest):
     job_id = create_job()
-    
+
     def run_and_clear(job_id, github_url):
-        run_pipeline(job_id, github_url)
+        run_pipeline(job_id, github_url=github_url)
         # clear cache so next query reloads fresh collection
         repo_name = get_job(job_id).get("repo_name")
         if repo_name and repo_name in resources_cache:
             del resources_cache[repo_name]
-    
+
     thread = threading.Thread(
         target=run_and_clear,
         args=(job_id, request.github_url),
@@ -72,6 +76,92 @@ def start_index(request: IndexRequest):
     )
     thread.start()
     return {"job_id": job_id}
+
+
+def _safe_repo_name(name: str) -> str:
+    """Sanitise an arbitrary string into a filesystem-safe repo name slug."""
+    name = re.sub(r"\.zip$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-._")
+    return name or "uploaded-repo"
+
+
+def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
+    """Extract a zip while refusing path-traversal attempts (../, absolute paths)."""
+    dest_resolved = dest.resolve()
+    for member in zf.infolist():
+        target = (dest / member.filename).resolve()
+        if not str(target).startswith(str(dest_resolved)):
+            raise ValueError(f"Refusing unsafe path in archive: {member.filename}")
+    zf.extractall(dest)
+
+
+@app.post("/index/upload")
+async def upload_index(
+    file: UploadFile = File(...),
+    repo_name: str = Form(None),
+):
+    """Accept a .zip of a local folder, extract it, and run the indexing pipeline."""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        return {"error": "Only .zip files are supported"}
+
+    name = _safe_repo_name(repo_name or file.filename)
+    artifact_dir = ARTIFACTS_DIR / name
+    repo_path = artifact_dir / "repo"
+
+    # Wipe any prior extraction for this name
+    if repo_path.exists():
+        shutil.rmtree(repo_path)
+    repo_path.mkdir(parents=True, exist_ok=True)
+
+    # Spool the upload to a temp file, then extract
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp_path = tmp.name
+            while True:
+                chunk = await file.read(1 << 20)  # 1 MB
+                if not chunk:
+                    break
+                tmp.write(chunk)
+
+        with zipfile.ZipFile(tmp_path, "r") as zf:
+            _safe_extract(zf, repo_path)
+    except zipfile.BadZipFile:
+        return {"error": "File is not a valid .zip archive"}
+    except ValueError as e:
+        return {"error": str(e)}
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    # If the zip wraps everything in a single top-level dir (common with `git archive`
+    # or GitHub-style "Source code (zip)"), flatten it so the pipeline sees the repo
+    # contents directly under repo_path.
+    entries = list(repo_path.iterdir())
+    if len(entries) == 1 and entries[0].is_dir():
+        inner = entries[0]
+        for item in inner.iterdir():
+            shutil.move(str(item), str(repo_path / item.name))
+        inner.rmdir()
+
+    job_id = create_job()
+
+    def run_and_clear(jid, sp, rn):
+        run_pipeline(jid, source_path=str(sp), repo_name_override=rn)
+        if rn in resources_cache:
+            del resources_cache[rn]
+
+    thread = threading.Thread(
+        target=run_and_clear,
+        args=(job_id, repo_path, name),
+        daemon=True,
+    )
+    thread.start()
+    return {"job_id": job_id, "repo_name": name}
+
 
 @app.get("/status/{job_id}")
 def get_status(job_id: str):
