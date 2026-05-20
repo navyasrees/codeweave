@@ -47,10 +47,12 @@ def detect_structure(repo_path: Path) -> dict:
                 if candidate.exists():
                     result["source_dir"] = candidate
 
-    # Step 3 — fallback: largest python folder 
+    # Step 3 — fallback: largest python folder
     # that isn't tests/docs/scripts
     if not result["source_dir"]:
-        skip = {"tests", "test", "docs", "doc", "scripts", "examples", "example"}
+        # "t" is Celery's single-letter test root — must be excluded here or it
+        # gets picked as source_dir when it has more .py files than the real package.
+        skip = {"tests", "test", "t", "docs", "doc", "scripts", "examples", "example"}
         candidates = [
             d for d in repo_path.iterdir()
             if d.is_dir()
@@ -83,7 +85,9 @@ def detect_structure(repo_path: Path) -> dict:
         result["docs_dir"] = repo_path
 
     # Step 5 — detect tests
-    tests_candidates = ["tests", "test", "spec"]
+    # "t" is Celery's test root convention — include it so enrich_with_tests
+    # can wire up tested_by edges correctly.
+    tests_candidates = ["tests", "test", "t", "spec"]
     for candidate in tests_candidates:
         path = repo_path / candidate
         if path.exists() and any(path.rglob("*.py")):
