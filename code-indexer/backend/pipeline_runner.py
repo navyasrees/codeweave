@@ -84,7 +84,7 @@ def run_pipeline(
 
         # Step 4 — build graph
         update_job(job_id, "building_graph", "Building context graph...")
-        graph, name_index = build_graph(indexed_functions, import_records)
+        graph, name_index, _qualified_name_index = build_graph(indexed_functions, import_records)
         graph_file = artifact_dir / "graph.pkl"
         save_graph(graph, graph_file)
 
